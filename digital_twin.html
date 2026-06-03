@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aerodynamic Control Center & Blade Profiler</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #0a0a0d;
+            color: #cbd4df;
+            height: 100vh;
+            display: flex;
+            overflow: hidden;
+        }
+
+        /* LEFT SIDEBAR PANEL - 30% SCREEN OCCUPANCY */
+        .dashboard-sidebar {
+            width: 30%;
+            height: 100%;
+            background: #111116;
+            border-right: 2px solid #1f1f26;
+            padding: 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            overflow-y: auto;
+            z-index: 10;
+        }
+
+        .header h2 { color: #00d2ff; font-size: 18px; font-weight: 600; letter-spacing: -0.5px; }
+        .header p { color: #64748b; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; margin-top: 2px; }
+
+        .control-group {
+            background: #17171e;
+            border: 1px solid #252530;
+            border-radius: 8px;
+            padding: 12px;
+        }
+
+        label { display: block; font-size: 10px; color: #94a3b8; font-weight: 700; text-transform: uppercase; margin-bottom: 6px; letter-spacing: 0.5px; }
+        
+        /* POWER CONTROL SYSTEM BUTTONS */
+        .btn-container { display: flex; gap: 8px; }
+        .btn {
+            flex: 1;
+            padding: 10px;
+            font-size: 11px;
+            font-weight: bold;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            text-transform: uppercase;
+            transition: all 0.2s ease;
+            color: white;
+        }
+        .btn-start { background: #10b981; }
+        .btn-start:hover { background: #059669; }
+        .btn-stop { background: #ef4444; }
+        .btn-stop:hover { background: #dc2626; }
+        
+        /* DUAL ROW SPEED CONTROLLER BLOCK */
+        .speed-input-wrapper { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+        .num-input-box {
+            width: 80px;
+            background: rgba(27, 27, 33, 0.7);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 4px;
+            color: #fff;
+            font-size: 14px;
+            font-family: monospace;
+            font-weight: bold;
+            padding: 6px 8px;
+            outline: none;
+            text-align: center;
+        }
+        .num-input-box:focus { border-color: #00d2ff; }
+        .unit-lbl { font-size: 11px; color: #64748b; font-weight: bold; }
+
+        .slider-wrapper { display: flex; align-items: center; gap: 12px; flex: 1; }
+        .range-slider { flex: 1; accent-color: #00d2ff; cursor: pointer; height: 4px; }
+        .val-display { font-family: monospace; font-size: 13px; font-weight: bold; color: #00d2ff; min-width: 45px; text-align: right; }
+
+        .telemetry-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .metric-box { background: rgba(22, 22, 28, 0.6); border: 1px solid rgba(255,255,255,0.03); padding: 8px 12px; border-radius: 6px; }
+        .metric-val { font-size: 13px; font-family: monospace; font-weight: bold; color: #fff; }
+
+        /* THE PARENT VISUALIZATION ARRAY CONTAINER */
+        .geometry-matrix-container {
+            display: flex;
+            gap: 12px;
+            width: 100%;
+            height: 260px;
+            margin-top: 4px;
+        }
+
+        /* LEFT COLUMN STACK (Z-AXIS & TELEMETRY) - EQUAL 50% HALF */
+        .matrix-left-stack {
+            width: calc(50% - 6px);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            height: 100%;
+        }
+
+        /* VIEWPORT CELL: Z-AXIS SQUARE WITH GLOW ACCENTS */
+        .viewport-square-small {
+            width: 100%;
+            height: 130px; 
+            background: #07070a;
+            border: 1px solid #22222b;
+            border-radius: 6px;
+            overflow: hidden;
+            position: relative;
+            box-shadow: inset 0 0 15px rgba(0, 210, 255, 0.05);
+            transition: border-color 0.3s ease;
+        }
+
+        /* RIGHT COLUMN CONTAINER: X-AXIS VIEWPORT WITH GLOW ACCENTS */
+        .viewport-rect-vertical {
+            width: calc(50% - 6px);
+            height: 260px; 
+            background: #07070a;
+            border: 1px solid #22222b;
+            border-radius: 6px;
+            overflow: hidden;
+            position: relative;
+            box-shadow: inset 0 0 15px rgba(0, 210, 255, 0.05);
+            transition: border-color 0.3s ease;
+        }
+
+        .geometry-matrix-container:hover .viewport-square-small,
+        .geometry-matrix-container:hover .viewport-rect-vertical {
+            border-color: rgba(0, 210, 255, 0.2);
+        }
+
+        .efficiency-fill-box {
+            width: 100%;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .mini-canvas { 
+            width: 100%; 
+            height: 100%; 
+        }
+        
+        .view-tag {
+            position: absolute;
+            top: 6px; left: 6px;
+            font-size: 8px; font-weight: bold; color: #00d2ff;
+            background: rgba(10, 10, 15, 0.85); padding: 2px 6px; border-radius: 3px;
+            border: 1px solid rgba(0, 210, 255, 0.2);
+            pointer-events: none; text-transform: uppercase; letter-spacing: 0.5px;
+            z-index: 5;
+        }
+
+        /* RIGHT PANEL - 70% WIND TURBINE CONTAINER */
+        .main-viewport-area {
+            width: 70%;
+            height: 100%;
+            position: relative;
+            background: #0e0e12;
+        }
+        #canvas-container { width: 100%; height: 100%; cursor: grab; }
+        #canvas-container:active { cursor: grabbing; }
+
+        /* VIEWPORT NAVIGATION CONTROLS HUD WRAPPER */
+        .right-hud-panel {
+            position: absolute;
+            top: 25px;
+            right: 25px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            z-index: 10;
+        }
+
+        .gizmo-hud-box {
+            width: 80px;
+            height: 80px;
+            background: rgba(17, 17, 21, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+        }
+
+        .viewport-toolbar {
+            display: flex;
+            background: rgba(17, 17, 21, 0.85);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 20px;
+            padding: 4px;
+            gap: 5px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        .v-btn {
+            background: transparent;
+            border: none;
+            color: #a0a0b0;
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            font-size: 11px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .v-btn:hover { background: rgba(255,255,255,0.1); color: #00d2ff; }
+        
+        #loading {
+            position: absolute;
+            top: 25px; left: 25px;
+            color: #64748b; font-family: monospace; font-size: 11px;
+            background: #111116; border: 1px solid #22222b;
+            padding: 6px 12px; border-radius: 4px; z-index: 20; pointer-events: none;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+
+    <div class="dashboard-sidebar">
+        <div class="header">
+            <h2>DIGITAL TWIN</h2>
+            <p>Team: Sulal | Transmission Controls</p>
+        </div>
+        
+        <div class="control-group">
+            <label>System Power Relay</label>
+            <div class="btn-container">
+                <button class="btn btn-start" onclick="setPowerState(true)">Engage</button>
+                <button class="btn btn-stop" onclick="setPowerState(false)">Brake</button>
+            </div>
+        </div>
+        
+        <div class="control-group">
+            <label>Base Input Velocity</label>
+            <div class="speed-input-wrapper">
+                <input type="number" id="rpmInput" class="num-input-box" value="0" min="0" max="2000" oninput="handleTextRPM(this.value)">
+                <span class="unit-lbl">RPM</span>
+            </div>
+            <div class="slider-wrapper">
+                <input type="range" id="rpmSlider" class="range-slider" min="0" max="2000" value="0" step="25" oninput="handleSliderRPM(this.value)">
+                <div id="rpmSliderDisplay" class="val-display">0 RPM</div>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label>Pitch Angle Shift (α)</label>
+            <div class="slider-wrapper">
+                <input type="range" id="pitchSlider" class="range-slider" min="-45" max="45" value="0" step="1" oninput="updateBladePitch(this.value)">
+                <div id="pitchDisplay" class="val-display">0°</div>
+            </div>
+        </div>
+
+        <div class="telemetry-row">
+            <div class="metric-box">
+                <label>Status</label>
+                <div id="statusTelemetry" class="metric-val" style="color: #ef4444;">OFFLINE</div>
+            </div>
+            <div class="metric-box">
+                <label>Velocity</label>
+                <div id="velocityTelemetry" class="metric-val">0.00 rad/s</div>
+            </div>
+        </div>
+
+        <label style="margin-top: 4px;">Analytical Visualization Array</label>
+        <div class="geometry-matrix-container">
+            
+            <div class="matrix-left-stack">
+                <div class="viewport-square-small">
+                    <div class="view-tag">Z-Axis View</div>
+                    <div id="canvas-profile-z" class="mini-canvas"></div>
+                </div>
+
+                <div class="efficiency-fill-box">
+                    <div class="metric-box" style="background: rgba(23, 23, 30, 0.8); border: 1px solid #252530; height: 100%; display: flex; flex-direction: column; justify-content: center;">
+                        <label style="margin-bottom: 4px;">Aerodynamic Efficiency</label>
+                        <div id="aerodynamicEfficiencyTelemetry" class="metric-val" style="color: #00d2ff; font-size: 13px;">100.0% <span style="font-size:10px; color:#64748b;">(Optimal)</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="viewport-rect-vertical">
+                <div class="view-tag">X-Axis View</div>
+                <div id="canvas-profile-x" class="mini-canvas"></div>
+            </div>
+
+        </div>
+    </div>
+
+    <div class="main-viewport-area">
+        <div id="canvas-container"></div>
+        
+        <div class="right-hud-panel">
+            <div class="gizmo-hud-box" id="gizmo-anchor"></div>
+            <div class="viewport-toolbar">
+                <button class="v-btn" onclick="snapView('front')" title="Front Profile View">-Y</button>
+                <button class="v-btn" onclick="snapView('right')" title="Side Profile View">+X</button>
+                <button class="v-btn" onclick="snapView('top')" title="Top Profile View">+Z</button>
+                <button class="v-btn" onclick="resetCamPosition()" title="Reset Perspective View">H</button>
+            </div>
+        </div>
+        
+        <div id="loading">Initializing glTF Parsing Engine...</div>
+    </div>
+
+    <script>
+    let isSystemActive = false;
+    let commandBaseRPM = 0;
+    let actualAerodynamicRPM = 0;
+    let activeVelocityRadSec = 0; 
+    let currentPitchDegrees = 0;
+    let pitchSpeedMultiplier = 1.0; 
+    
+    let rotatingParts = [];
+    let isolatedBladeMeshGroup = null; 
+
+    const rpmInput = document.getElementById("rpmInput");
+    const rpmSlider = document.getElementById("rpmSlider");
+    const rpmSliderDisplay = document.getElementById("rpmSliderDisplay");
+    const statusTelemetry = document.getElementById("statusTelemetry");
+    const velocityTelemetry = document.getElementById("velocityTelemetry");
+    const pitchSlider = document.getElementById("pitchSlider");
+    const pitchDisplay = document.getElementById("pitchDisplay");
+    const aeroEfficiencyTelemetry = document.getElementById("aerodynamicEfficiencyTelemetry");
+
+    function handleSliderRPM(val) {
+        let num = parseInt(val);
+        if (num > 2000) num = 2000;
+        commandBaseRPM = num;
+        rpmInput.value = num;
+        rpmSliderDisplay.innerText = `${num} RPM`;
+        calculateAerodynamicCoupling();
+        if (commandBaseRPM > 0 && !isSystemActive) setPowerState(true);
+        else if (commandBaseRPM === 0 && isSystemActive) setPowerState(false);
+    }
+
+    function handleTextRPM(val) {
+        let num = parseInt(val) || 0;
+        if (num < 0) num = 0;
+        if (num > 2000) num = 2000; 
+        commandBaseRPM = num;
+        rpmSlider.value = num;
+        rpmSliderDisplay.innerText = `${num} RPM`;
+        calculateAerodynamicCoupling();
+        if (commandBaseRPM > 0 && !isSystemActive) setPowerState(true);
+        else if (commandBaseRPM === 0 && isSystemActive) setPowerState(false);
+    }
+
+    function setPowerState(isActive) {
+        isSystemActive = isActive;
+        if (isSystemActive) {
+            statusTelemetry.innerText = "RUNNING";
+            statusTelemetry.style.color = "#10b981";
+            if (commandBaseRPM === 0) {
+                commandBaseRPM = 300;
+                rpmSlider.value = 300;
+                rpmInput.value = 300;
+                rpmSliderDisplay.innerText = "300 RPM";
+            }
+        } else {
+            statusTelemetry.innerText = "OFFLINE";
+            statusTelemetry.style.color = "#ef4444";
+        }
+        calculateAerodynamicCoupling();
+    }
+
+    function updateBladePitch(degValue) {
+        currentPitchDegrees = parseFloat(degValue);
+        pitchSlider.value = currentPitchDegrees;
+        pitchDisplay.innerText = `${currentPitchDegrees}°`;
+
+        pitchSpeedMultiplier = Math.max(0.05, 1.0 - Math.pow(currentPitchDegrees / 45, 2));
+        
+        const percentageDisplay = (pitchSpeedMultiplier * 100).toFixed(1);
+        if (currentPitchDegrees === 0) {
+            aeroEfficiencyTelemetry.innerHTML = `${percentageDisplay}% <span style="font-size:10px; color:#64748b;">(Optimal)</span>`;
+        } else {
+            aeroEfficiencyTelemetry.innerHTML = `${percentageDisplay}% <span style="font-size:10px; color:#64748b;">(Loss)</span>`;
+        }
+
+        calculateAerodynamicCoupling();
+
+        if (isolatedBladeMeshGroup) {
+            isolatedBladeMeshGroup.rotation.y = THREE.MathUtils.degToRad(currentPitchDegrees);
+        }
+    }
+
+    function calculateAerodynamicCoupling() {
+        actualAerodynamicRPM = isSystemActive ? (commandBaseRPM * pitchSpeedMultiplier) : 0;
+    }
+
+    // --- MAIN ENGINE FIELD INTERACTIVE VIEWPORT (70%) ---
+    const container = document.getElementById('canvas-container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x121218); 
+
+    const camera = new THREE.PerspectiveCamera(38, container.clientWidth / container.clientHeight, 0.1, 100);
+    
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "high-performance" });
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap; 
+    renderer.outputEncoding = THREE.sRGBEncoding;     
+    renderer.toneMapping = THREE.ACESFilmicToneMapping; 
+    renderer.toneMappingExposure = 1.25; 
+    container.appendChild(renderer.domElement);
+
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.maxPolarAngle = Math.PI / 2 + 0.05; 
+    controls.target.set(0, 2.3, 0);
+
+    function resetCamPosition() {
+        camera.position.set(5.5, 3.8, 6.8);
+        controls.target.set(0, 2.3, 0);
+        controls.update();
+    }
+    resetCamPosition();
+
+    function snapView(direction) {
+        const dist = 7.5;
+        if (direction === 'front') camera.position.set(0, 2.3, dist);
+        if (direction === 'right') camera.position.set(dist, 2.3, 0);
+        if (direction === 'top') camera.position.set(0, dist + 2.3, 0);
+        controls.target.set(0, 2.3, 0);
+        controls.update();
+    }
+
+    const lightAmbient = new THREE.AmbientLight(0xffffff, 0.75); 
+    scene.add(lightAmbient);
+
+    const sunLight = new THREE.DirectionalLight(0xffffff, 3.2); 
+    sunLight.position.set(10, 18, 12);
+    sunLight.castShadow = true;
+    sunLight.shadow.mapSize.width = 2048; 
+    sunLight.shadow.mapSize.height = 2048;
+    sunLight.shadow.bias = -0.0004;
+    scene.add(sunLight);
+
+    const rimLight = new THREE.DirectionalLight(0xdbeafe, 1.5); 
+    rimLight.position.set(-10, 8, -12);
+    scene.add(rimLight);
+
+    const pmremGenerator = new THREE.PMREMGenerator(renderer);
+    pmremGenerator.compileEquirectangularShader();
+    const generateBackgroundEnv = () => {
+        const dataScene = new THREE.Scene();
+        const rawLight1 = new THREE.DirectionalLight(0xffffff, 6.0); 
+        rawLight1.position.set(5, 12, 5);
+        dataScene.add(rawLight1);
+        const internalTarget = pmremGenerator.fromScene(dataScene);
+        return internalTarget.texture;
+    };
+    const studioEnvMap = generateBackgroundEnv();
+    scene.environment = studioEnvMap;
+
+    const floorGeo = new THREE.PlaneGeometry(40, 40);
+    const floorMat = new THREE.ShadowMaterial({ opacity: 0.4 }); 
+    const floor = new THREE.Mesh(floorGeo, floorMat);
+    floor.rotation.x = -Math.PI / 2;
+    floor.receiveShadow = true;
+    scene.add(floor);
+
+    const gridHelper = new THREE.GridHelper(40, 40, 0x242435, 0x14141c);
+    gridHelper.position.y = 0.002; 
+    scene.add(gridHelper);
+
+    const bladeMaterial = new THREE.MeshPhysicalMaterial({ 
+        color: 0xf3f4f6, roughness: 0.10, metalness: 0.95, clearcoat: 0.3, clearcoatRoughness: 0.05, envMapIntensity: 2.5 
+    });
+    const generatorMaterial = new THREE.MeshPhysicalMaterial({ 
+        color: 0xe5e7eb, roughness: 0.18, metalness: 0.85, envMapIntensity: 1.8 
+    });
+    const shaftMaterial = new THREE.MeshPhysicalMaterial({ 
+        color: 0xffffff, roughness: 0.01, metalness: 1.0, envMapIntensity: 3.0 
+    });
+    const towerMaterial = new THREE.MeshPhysicalMaterial({ 
+        color: 0xcbd5e1, roughness: 0.20, metalness: 0.92, envMapIntensity: 2.0 
+    });
+
+    const loader = new THREE.GLTFLoader();
+    loader.load('turbine.glb', function(gltf) {
+        const model = gltf.scene;
+        model.traverse((child) => {
+            if (child.isMesh) {
+                child.castShadow = true; child.receiveShadow = true;
+                const nameClean = child.name.replace(/\s+/g, '').toLowerCase();
+                if (nameClean.includes("wt001") || nameClean.includes("wt.001") || nameClean.includes("hub") || nameClean.includes("blade")) {
+                    child.material = bladeMaterial; rotatingParts.push(child); 
+                } else if (nameClean.includes("wt005") || nameClean.includes("generator")) {
+                    child.material = generatorMaterial;
+                } else if (nameClean.includes("wt006") || nameClean.includes("shaft")) {
+                    child.material = shaftMaterial;
+                } else if (nameClean.includes("wt007") || nameClean.includes("tower") || nameClean.includes("wt")) {
+                    child.material = towerMaterial;
+                } else { child.material = towerMaterial; }
+            }
+        });
+        scene.add(model);
+        document.getElementById('loading').style.display = 'none';
+    }, undefined, function(err) {
+        loader.load('turbine4.glb', function(gltfSub) {
+            const model = gltfSub.scene;
+            model.traverse((child) => {
+                if (child.isMesh) {
+                    child.castShadow = true; child.receiveShadow = true;
+                    const nameClean = child.name.replace(/\s+/g, '').toLowerCase();
+                    if (nameClean.includes("wt001") || nameClean.includes("hub") || nameClean.includes("blade")) {
+                        child.material = bladeMaterial; rotatingParts.push(child);
+                    } else { child.material = towerMaterial; }
+                }
+            });
+            scene.add(model);
+            document.getElementById('loading').style.display = 'none';
+        }, undefined, function(innerErr) {
+            document.getElementById('loading').innerText = "GLTF Asset Initialization Error.";
+        });
+    });
+
+    // ==============================================================
+    // ENHANCED SUBSYSTEM ENGINE: TECH PROFILE VIEWS
+    // ==============================================================
+    const profileBladeScene = new THREE.Scene();
+    profileBladeScene.background = new THREE.Color(0x0a0a0f); // Deep tech blue-black
+
+    // Sharp analytical workspace measurement grid layout
+    const profileGrid = new THREE.GridHelper(10, 50, 0x00d2ff, 0x1e1e2f);
+    profileGrid.position.z = -1; 
+    profileGrid.rotation.x = Math.PI / 2; 
+    profileBladeScene.add(profileGrid);
+
+    profileBladeScene.environment = studioEnvMap;
+    profileBladeScene.add(new THREE.AmbientLight(0xffffff, 0.4));
+
+    // Curvature key-light setups
+    const analyticalLight1 = new THREE.DirectionalLight(0x00d2ff, 2.5);
+    analyticalLight1.position.set(5, 5, 4);
+    profileBladeScene.add(analyticalLight1);
+
+    const analyticalLight2 = new THREE.DirectionalLight(0xffffff, 1.5);
+    analyticalLight2.position.set(-5, -5, 4);
+    profileBladeScene.add(analyticalLight2);
+
+    isolatedBladeMeshGroup = new THREE.Group();
+    profileBladeScene.add(isolatedBladeMeshGroup);
+
+    // INITIAL ORTHOGRAPHIC FRAME SETUPS
+    const elX = document.getElementById('canvas-profile-x');
+    const camX = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.05, 20);
+    camX.position.set(5, 0, 0);
+    camX.lookAt(0, 0, 0);
+
+    const renderX = new THREE.WebGLRenderer({ antialias: true });
+    renderX.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderX.outputEncoding = THREE.sRGBEncoding;
+    elX.appendChild(renderX.domElement);
+
+    const elZ = document.getElementById('canvas-profile-z');
+    const camZ = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.05, 20);
+    camZ.position.set(0, 5, 0);
+    camZ.lookAt(0, 0, 0);
+
+    const renderZ = new THREE.WebGLRenderer({ antialias: true });
+    renderZ.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderZ.outputEncoding = THREE.sRGBEncoding;
+    elZ.appendChild(renderZ.domElement);
+
+    // INDEPENDENT AUTO-ZOOM MATRIX CALCULATION PIPELINE
+    function maximizeBladeViewports(meshInstance) {
+        const boundingBox = new THREE.Box3().setFromObject(meshInstance);
+        const size = new THREE.Vector3();
+        boundingBox.getSize(size);
+
+        // Framing margins (1.05 = 5% padding buffer)
+        const marginPadding = 1.05;
+
+        // X-AXIS CAM LOOKS AT: Y and Z plane geometry profile 
+        const maxDimX = Math.max(size.y, size.z);
+        const frameFactorX = (maxDimX / 2) * marginPadding;
+        const ratioX = elX.clientWidth / elX.clientHeight;
+        camX.left   = -frameFactorX * ratioX;
+        camX.right  =  frameFactorX * ratioX;
+        camX.top    =  frameFactorX;
+        camX.bottom = -frameFactorX;
+        camX.updateProjectionMatrix();
+
+        // Z-AXIS CAM LOOKS AT: X and Y plane geometry profile face-on
+        const maxDimZ = Math.max(size.x, size.y); 
+        const frameFactorZ = (maxDimZ / 2) * 0.21; // Specialized compact framing layout
+        const ratioZ = elZ.clientWidth / elZ.clientHeight;
+        camZ.left   = -frameFactorZ * ratioZ;
+        camZ.right  =  frameFactorZ * ratioZ;
+        camZ.top    =  frameFactorZ;
+        camZ.bottom = -frameFactorZ;
+        camZ.updateProjectionMatrix();
+    }
+
+    loader.load('blade.glb', function(gltf) {
+        const loadedMesh = gltf.scene;
+        
+        // Premium Structural High-Gloss Mesh Materials
+        const premiumBladeMat = new THREE.MeshPhysicalMaterial({ 
+            color: 0x111622, 
+            roughness: 0.2, 
+            metalness: 0.8, 
+            clearcoat: 1.0, 
+            clearcoatRoughness: 0.1, 
+            envMapIntensity: 2.0 
+        });
+
+        loadedMesh.traverse((child) => { 
+            if (child.isMesh) {
+                child.material = premiumBladeMat;
+
+                // Technical structural mesh overlay line segments
+                const wireGeo = new THREE.WireframeGeometry(child.geometry);
+                const wireMat = new THREE.LineBasicMaterial({ 
+                    color: 0x00d2ff, 
+                    transparent: true, 
+                    opacity: 0.15 
+                });
+                const wireframe = new THREE.LineSegments(wireGeo, wireMat);
+                child.add(wireframe);
+            } 
+        });
+
+        // Center the local geometry to the coordinate pivot origin
+        const boundingBox = new THREE.Box3().setFromObject(loadedMesh);
+        const centerOffset = new THREE.Vector3();
+        boundingBox.getCenter(centerOffset);
+        
+        loadedMesh.position.sub(centerOffset);
+        isolatedBladeMeshGroup.add(loadedMesh);
+        
+        // Compute and fit bounding views
+        maximizeBladeViewports(isolatedBladeMeshGroup);
+        resizeSubViewports();
+    });
+
+    // ==============================================================
+    // SEPARATED SUB-SYSTEM: ORIENTATION AXIS-GIZMO SYSTEM
+    // ==============================================================
+    const gizmoAnchor = document.getElementById('gizmo-anchor');
+    const gizmoScene = new THREE.Scene();
+    const gizmoCam = new THREE.OrthographicCamera(-1.2, 1.2, 1.2, -1.2, 0.1, 10);
+    gizmoCam.position.set(0, 0, 4);
+
+    const gizmoRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    gizmoRenderer.setSize(80, 80);
+    gizmoAnchor.appendChild(gizmoRenderer.domElement);
+
+    const createGizmoLine = (color, endVec) => {
+        const mat = new THREE.LineBasicMaterial({ color: color, linewidth: 3 });
+        const geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), endVec]);
+        return new THREE.Line(geo, mat);
+    };
+
+    const axisX = createGizmoLine(0xff3b30, new THREE.Vector3(0.6, 0, 0)); 
+    const axisY = createGizmoLine(0x34c759, new THREE.Vector3(0, 0.6, 0)); 
+    const axisZ = createGizmoLine(0x007aff, new THREE.Vector3(0, 0, 0.6)); 
+    
+    const gizmoGroup = new THREE.Group();
+    gizmoGroup.add(axisX, axisY, axisZ);
+    gizmoScene.add(gizmoGroup);
+
+    // --- MAIN ENGINE SYSTEM ANIMATION RUNLOOP ---
+    const clock = new THREE.Clock();
+
+    function animate() {
+        requestAnimationFrame(animate);
+        const delta = clock.getDelta();
+
+        controls.update();
+
+        const targetRadSec = isSystemActive ? (actualAerodynamicRPM * Math.PI * 2) / 60 : 0;
+        const interpolationSpeed = isSystemActive ? 2.5 : 1.2;
+        activeVelocityRadSec += (targetRadSec - activeVelocityRadSec) * (interpolationSpeed * delta);
+
+        velocityTelemetry.innerHTML = `${activeVelocityRadSec.toFixed(2)} <span style="font-size:10px; color:#64748b;">rad/s</span>`;
+
+        if (rotatingParts.length > 0) {
+            rotatingParts.forEach((part) => {
+                part.rotation.x += activeVelocityRadSec * delta; 
+            });
+        }
+
+        gizmoGroup.quaternion.copy(camera.quaternion).invert();
+
+        renderer.render(scene, camera);
+        renderX.render(profileBladeScene, camX);
+        renderZ.render(profileBladeScene, camZ);
+        gizmoRenderer.render(gizmoScene, gizmoCam);
+    }
+
+    function resizeSubViewports() {
+        if (!isolatedBladeMeshGroup) return;
+        
+        renderX.setSize(elX.clientWidth, elX.clientHeight);
+        renderZ.setSize(elZ.clientWidth, elZ.clientHeight);
+        maximizeBladeViewports(isolatedBladeMeshGroup);
+    }
+
+    window.addEventListener('resize', () => {
+        const mainArea = document.querySelector('.main-viewport-area');
+        camera.aspect = mainArea.clientWidth / mainArea.clientHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(mainArea.clientWidth, mainArea.clientHeight);
+
+        resizeSubViewports();
+    });
+
+    // Run setup alignment passes on minor structural render ticks
+    setTimeout(() => { if(isolatedBladeMeshGroup) maximizeBladeViewports(isolatedBladeMeshGroup); }, 150);
+
+    animate();
+</script>
+</body>
+</html>
